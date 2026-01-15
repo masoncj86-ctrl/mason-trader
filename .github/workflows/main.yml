@@ -1,0 +1,32 @@
+name: Mason Daily Analysis
+
+on:
+  schedule:
+    # 한국 시간 기준 매일 아침 8시 (UTC 23:00) 실행
+    - cron: '0 23 * * *'
+  workflow_dispatch: # 수동으로 실행 버튼을 만들기 위한 옵션
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install yfinance pandas requests
+
+    - name: Run Mason Logic
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        MY_SEED: ${{ secrets.MY_SEED }}
+        MY_HOLDINGS: ${{ secrets.MY_HOLDINGS }}
+      run: |
+        python mason.py --auto
