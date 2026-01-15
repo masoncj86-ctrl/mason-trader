@@ -1,0 +1,70 @@
+import yfinance as yf
+import requests
+import math
+import pandas as pd
+import threading
+import sys
+import json
+import os
+from datetime import datetime
+
+# --- [1. 설정 정보 (클라우드 대응)] ---
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "5466858773")
+
+DEFAULT_SEED = os.environ.get("MY_SEED", "4000")
+DEFAULT_HOLDINGS = os.environ.get("MY_HOLDINGS", "TSLL,SOXL")
+
+CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX"]
+MAX_HOLDINGS = 3    
+DIVISIONS = 40      
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SETTINGS_FILE = os.path.join(BASE_DIR, "mason_settings.json")
+
+# --- [2. 핵심 로직 클래스] ---
+class MasonLogic:
+    def __init__(self):
+        self.settings = self.load_settings()
+
+    def load_settings(self):
+        default = {"seed": DEFAULT_SEED, "holdings": DEFAULT_HOLDINGS, "last_run_date": ""}
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except: return default
+        return default
+
+    def save_settings(self, seed, holdings, update_date=False):
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            return
+        data = {
+            "seed": seed,
+            "holdings": holdings,
+            "last_run_date": datetime.now().strftime("%Y-%m-%d") if update_date else self.settings.get("last_run_date", "")
+        }
+        try:
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+        except: pass
+
+    def get_exchange_rate(self):
+        try:
+            res = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()
+            return float(res['rates']['KRW'])
+        except: return 1450.0
+
+    def calculate_rsi_wilder(self, series, period=14):
+        delta = series.diff()
+        up = delta.clip(lower=0)
+        down = -1 * delta.clip(upper=0)
+        ma_up = up.ewm(com=period - 1, adjust=False).mean()
+        ma_down = down.ewm(com=period - 1, adjust=False).mean()
+        return 100 - (100 / (1 + (ma_up / ma_down)))
+
+    def send_telegram(self, message):
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
+        except Exception as e: print(f"Telegram Error: {e}
