@@ -12,8 +12,8 @@ from datetime import datetime
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "5466858773")
 
-DEFAULT_SEED = os.environ.get("MY_SEED", "4000")
-DEFAULT_HOLDINGS = os.environ.get("MY_HOLDINGS", "TSLL,SOXL")
+DEFAULT_SEED = os.environ.get("MY_SEED", "5500")
+DEFAULT_HOLDINGS = os.environ.get("MY_HOLDINGS", "TSLL,LABU")
 
 CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX"]
 MAX_HOLDINGS = 3    
