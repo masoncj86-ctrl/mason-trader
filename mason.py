@@ -6,7 +6,7 @@ import threading
 import sys
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta  # 날짜 계산용 모듈 추가됨
 
 # --- [1. 설정 정보 (클라우드 대응)] ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY")
@@ -81,14 +81,19 @@ class MasonLogic:
             if logger: logger(f"SEED: {seed_money:,.0f} MAN-WON | RATE: {rate:.1f}")
             
             date_display = datetime.now().strftime("%Y년 %m월 %d일")
-            final_report = f"📅 {date_display}\n🌅 [Mason Daily Report]\nSEED: {seed_money:,.0f}만원 / RATE: {rate:.1f}원\n"
+            final_report = f"📅 {date_display}\n🌅 [Mason Daily Report]\nSEED: {seed_money:,.0f}만원 / DIV: {DIVISIONS}\nRATE: {rate:.1f}원\n"
             
             found_cnt = 0
             for ticker in CANDIDATES:
                 try:
                     df = yf.download(ticker, period="3mo", progress=False)
                     if df.empty or len(df) < 20: continue
-                    close = df['Close'].squeeze()
+                    
+                    # MultiIndex 대응 및 종가 추출
+                    close = df['Close']
+                    if isinstance(close, pd.DataFrame):
+                        close = close.iloc[:, 0]
+                    
                     rsi = float(self.calculate_rsi_wilder(close).iloc[-1])
                     last_close = float(close.iloc[-1])
                     buy_qty = math.ceil(daily_budget_usd / last_close)
@@ -106,13 +111,40 @@ class MasonLogic:
                     try:
                         df = yf.download(ticker, period="3mo", progress=False)
                         if df.empty: continue
-                        close = df['Close'].squeeze()
+                        
+                        close = df['Close']
+                        if isinstance(close, pd.DataFrame):
+                            close = close.iloc[:, 0]
+                            
                         rsi = float(self.calculate_rsi_wilder(close).iloc[-1])
                         last_close = float(close.iloc[-1])
                         buy_qty = math.ceil(daily_budget_usd / last_close)
                         loc_price = last_close * 1.10
                         final_report += f"\n📦 [HOLDING] {ticker}\nRSI: {rsi:.1f} / QTY: {buy_qty}\nLOC(10%): ${loc_price:.2f}\n"
                     except Exception as e: print(f"Error checking holding {ticker}: {e}")
+
+            # ---------------------------------------------------------
+            # [NEW] 2억 목표 달성 시뮬레이션 로직 (여기에 추가됨)
+            # ---------------------------------------------------------
+            target_goal = 20000  # 2억 원 (단위: 만원)
+            
+            if seed_money < target_goal:
+                # 월 10% 복리 계산: n = log(목표/현재) / log(1.1)
+                months_to_go = math.log(target_goal / seed_money) / math.log(1.1)
+                days_to_go = int(months_to_go * 30.44) # 평균 월 일수 적용
+                expected_date = datetime.now() + timedelta(days=days_to_go)
+                
+                achievement_rate = (seed_money / target_goal) * 100
+                
+                goal_report = f"\n🎯 [2억 달성 프로젝트]"
+                goal_report += f"\n현재 달성률: {achievement_rate:.1f}%"
+                goal_report += f"\n예상 달성일: {expected_date.strftime('%Y년 %m월 %d일')}"
+                goal_report += f"\n(월 10% 복리 수익 가정 시)\n"
+            else:
+                goal_report = f"\n🎊 축하합니다! 이미 2억 목표를 달성했습니다!\n"
+            
+            final_report += goal_report
+            # ---------------------------------------------------------
 
             final_report += "\n------------------\nEND OF REPORT."
             self.send_telegram(final_report)
@@ -132,4 +164,3 @@ if __name__ == "__main__":
         holdings_val = os.environ.get("MY_HOLDINGS", logic.settings.get("holdings", ""))
         print(">>> Starting Auto Analysis (Cloud Mode)...")
         logic.perform_analysis(seed_val, holdings_val, is_auto=True)
-
