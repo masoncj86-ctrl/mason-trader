@@ -17,7 +17,7 @@ DEFAULT_HOLDINGS = os.environ.get("MY_HOLDINGS", "TSLL,LABU")
 
 CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX", "FNGU"]
 MAX_HOLDINGS = 3    
-DIVISIONS = 40      
+DIVISIONS = 20      
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(BASE_DIR, "mason_settings.json")
