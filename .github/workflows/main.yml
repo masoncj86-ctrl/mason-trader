@@ -34,4 +34,4 @@ jobs:
           MY_SEED: ${{ vars.MY_SEED }}
           MY_HOLDINGS: ${{ vars.MY_HOLDINGS }}
           MY_DIVISIONS: ${{ vars.MY_DIVISIONS }}
-        run: python main.py  # 사령관님의 실제 파일명으로 수정 필수!
+        run: python mason.py  # 사령관님의 실제 파일명으로 수정 필수!
