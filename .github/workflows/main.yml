@@ -2,8 +2,8 @@ name: Mason Real-Time Report
 
 on:
   schedule:
-    - cron: '0 13 * * *' # 매일 밤 지독하게 실행
-  workflow_dispatch:
+    - cron: '0 13 * * *' # 매일 오후 10시(KST) 지독하게 실행
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
 jobs:
   build:
@@ -34,4 +34,4 @@ jobs:
           MY_SEED: ${{ vars.MY_SEED }}
           MY_HOLDINGS: ${{ vars.MY_HOLDINGS }}
           MY_DIVISIONS: ${{ vars.MY_DIVISIONS }}
-        run: python your_script_name.py  # 사령관님의 파일명으로 지독하게 고쳐주세요!
+        run: python main.py  # 사령관님의 실제 파일명으로 수정 필수!
