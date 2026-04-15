@@ -5,20 +5,26 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-# --- [환경 변수 로드 및 방어 로직] ---
-def get_env(key, default):
-    val = os.environ.get(key, "").strip()
-    # 값이 없거나, NONE이거나, 공백이면 기본값을 지독하게 주입!
+# --- [환경 변수 로드 및 지독한 방어 로직] ---
+def get_env_safe(key, default_value):
+    # 시스템에서 값을 가져온 뒤 앞뒤 공백을 지독하게 제거합니다.
+    val = os.environ.get(key, "")
+    if val is None:
+        return str(default_value)
+    val = val.strip()
+    # 값이 비어있거나 'NONE'이면 사령관님이 정한 기본값을 씁니다.
     if not val or val.upper() == "NONE":
-        return default
+        return str(default_value)
     return val
 
-TOKEN = get_env("TELEGRAM_TOKEN", "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY")
-CHAT_ID = get_env("TELEGRAM_CHAT_ID", "5466858773")
-# 시드값이 비어있으면 사령관님의 현재 자산인 8000으로 강제 세팅!
-RAW_SEED = get_env("MY_SEED", "8000")
-RAW_HOLDINGS = get_env("MY_HOLDINGS", "TSLL,FNGU")
-RAW_DIVS = get_env("MY_DIVISIONS", "40")
+# 텔레그램 설정 (보안상 시크릿 권장이나 실패 시 기본값 작동)
+TOKEN = get_env_safe("TELEGRAM_TOKEN", "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY")
+CHAT_ID = get_env_safe("TELEGRAM_CHAT_ID", "5466858773")
+
+# 사령관님의 현재 실전 데이터 (시크릿이 비어있을 때를 대비한 8,000만 원 보루)
+RAW_SEED = get_env_safe("MY_SEED", "8000")
+RAW_HOLDINGS = get_env_safe("MY_HOLDINGS", "TSLL,FNGU")
+RAW_DIVS = get_env_safe("MY_DIVISIONS", "40")
 
 CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX", "FNGU"]
 
@@ -40,18 +46,20 @@ def send_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
-    except: pass
+    except Exception as e:
+        print(f"Telegram Send Error: {e}")
 
 def main():
     try:
-        seed_val = float(RAW_SEED.replace(',', ''))
-        divs = int(RAW_DIVS)
-        holdings = [t.strip().upper() for t in RAW_HOLDINGS.split(',') if t.strip()]
+        # 지독하게 안전한 숫자 변환 (쉼표 제거 포함)
+        seed_val = float(str(RAW_SEED).replace(',', ''))
+        divs = int(str(RAW_DIVS))
+        holdings = [t.strip().upper() for t in str(RAW_HOLDINGS).split(',') if t.strip() and t.upper() != "NONE"]
         
         rate = get_exchange_rate()
         budget_usd = ((seed_val * 10000) / 3 / divs) / rate
 
-        report = f"📅 {datetime.now().strftime('%Y-%m-%d')}\n🌅 [Mason Final Report]\nSEED: {seed_val:,.0f}만 / DIV: {divs}\n"
+        report = f"📅 {datetime.now().strftime('%Y-%m-%d')}\n🌅 [Mason Classic-V2 Report]\nSEED: {seed_val:,.0f}만 / DIV: {divs}\nRATE: {rate:.1f}원\n"
         
         # 신규 사냥감 분석
         found = 0
@@ -72,27 +80,29 @@ def main():
         for t in holdings:
             try:
                 df = yf.download(t, period="3mo", progress=False)
+                if df.empty: continue
                 close = df['Close'].iloc[:, 0] if isinstance(df['Close'], pd.DataFrame) else df['Close']
                 rsi = float(calculate_rsi(close).iloc[-1])
                 price = float(close.iloc[-1])
                 report += f"\n📦 [HOLDING] {t}\nRSI: {rsi:.1f} / QTY: {math.ceil(budget_usd/price)}\n"
             except: continue
 
-        # 2억 달성 시뮬레이션 (순수 복리)
+        # 2억 달성 시뮬레이션 (보급 없이 순수 복리 5%)
         target = 20000
         months = 0
         temp_s = seed_val
-        while temp_s < target and months < 120:
+        while temp_s < target and months < 240:
             temp_s *= 1.05
             months += 1
-        report += f"\n🎯 [2억 달성 예상일]\n{ (datetime.now() + timedelta(days=months*30)).strftime('%Y-%m-%d') }\n"
+        expected_date = (datetime.now() + timedelta(days=months*30)).strftime('%Y년 %m월 %d일')
+        report += f"\n🎯 [2억 달성 예상일]\n{expected_date}\n"
         
         report += "\n------------------\n사령관님, 지독하게 원칙 매수하십시오!"
         send_telegram(report)
-        print("Report Sent!")
+        print(">>> SUCCESS: Report Sent to Telegram.")
 
     except Exception as e:
-        print(f"Error in main: {e}")
+        print(f">>> CRITICAL ERROR: {e}")
 
 if __name__ == "__main__":
     main()
