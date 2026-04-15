@@ -26,12 +26,13 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install yfinance requests pandas
-
+          
       - name: Run Mason Logic
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MY_SEED: ${{ vars.MY_SEED }}
-          MY_HOLDINGS: ${{ vars.MY_HOLDINGS }}
-          MY_DIVISIONS: ${{ vars.MY_DIVISIONS }}
-        run: python mason.py  # 사령관님의 실제 파일명으로 수정 필수!
+          # vars를 secrets로 지독하게 수정했습니다!
+          MY_SEED: ${{ secrets.MY_SEED }}      
+          MY_HOLDINGS: ${{ secrets.MY_HOLDINGS }}  
+          MY_DIVISIONS: ${{ secrets.MY_DIVISIONS }}
+        run: python mason.py
