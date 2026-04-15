@@ -8,17 +8,12 @@ import sys
 from datetime import datetime, timedelta
 
 # --- [1. 설정 정보 (클라우드 대응)] ---
+# 보안을 위해 Secrets에서 가져오되, 실패 시 사령관님의 텔레그램으로 보급
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "5466858773")
 
-DEFAULT_SEED = os.environ.get("MY_SEED", "NONE")
-DEFAULT_HOLDINGS = os.environ.get("MY_HOLDINGS", "NONE")
-# [추가] 분할 횟수를 GitHub Variables에서 받아오도록 설정 (기본값 40)
-DEFAULT_DIVISIONS = os.environ.get("MY_DIVISIONS", "40")
-
 CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX", "FNGU"]
 MAX_HOLDINGS = 3    
-# 하드코딩된 DIVISIONS 변수 삭제
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(BASE_DIR, "mason_settings.json")
@@ -61,7 +56,7 @@ class MasonLogic:
         down = -1 * delta.clip(upper=0)
         ma_up = up.ewm(com=period - 1, adjust=False).mean()
         ma_down = down.ewm(com=period - 1, adjust=False).mean()
-        ma_down = ma_down.replace(0, 0.001) # 0 나누기 방지
+        ma_down = ma_down.replace(0, 0.001)
         return 100 - (100 / (1 + (ma_up / ma_down)))
 
     def send_telegram(self, message):
@@ -71,30 +66,31 @@ class MasonLogic:
         except Exception as e: print(f"Telegram Error: {e}")
 
     def perform_analysis(self, seed_str, holdings_str, divisions_str, is_auto=False):
-        # [핵심 로직] 변수가 "NONE"이거나 기본값이면 실행하지 않고 종료
-        if seed_str == "NONE" or seed_str == "5500":
-            print(">>> [SKIP] Real Variable not set. Skipping report.")
+        # [지독한 방탄 로직] 빈 값, 유령 데이터(5500), NONE을 완벽하게 차단
+        clean_seed_str = str(seed_str).strip() if seed_str else ""
+        
+        if not clean_seed_str or clean_seed_str.upper() in ["", "NONE", "5500"]:
+            print(f">>> [SKIP] Invalid Variable. SEED='{clean_seed_str}'. Skipping report.")
             return
 
         try:
-            seed_money = float(str(seed_str).replace(',', ''))
+            seed_money = float(clean_seed_str.replace(',', ''))
             my_holdings = [t for t in str(holdings_str).upper().replace(' ', '').split(',') if t and t != "NONE"]
             
-            # [추가] 분할 횟수 형변환 및 예외 처리
             try:
-                divisions = int(divisions_str)
+                divisions = int(str(divisions_str).strip())
             except:
-                divisions = 40 # 오류 시 강철의 1/40 적용
+                divisions = 40 # 사령관님의 기본 강철 원칙
             
             rate = self.get_exchange_rate()
             
-            # 1일 매수 예산 산출 (동적 divisions 적용)
+            # 1일 매수 예산 산출 (사령관의 1/40 또는 1/60 화력 반영)
             daily_budget_usd = ((seed_money * 10000) / MAX_HOLDINGS / divisions) / rate
 
             date_display = datetime.now().strftime("%Y년 %m월 %d일")
             final_report = f"📅 {date_display}\n🌅 [Mason Real-Time Report]\nSEED: {seed_money:,.0f}만원 / DIV: {divisions}\nRATE: {rate:.1f}원\n"
             
-            # 신규 후보군 분석
+            # 1. 신규 후보군 분석 (RSI 40 이하 사냥)
             found_cnt = 0
             for ticker in CANDIDATES:
                 try:
@@ -113,7 +109,7 @@ class MasonLogic:
 
             if found_cnt == 0: final_report += "\n✅ 신규 진입 후보 없음 (RSI > 40)\n"
 
-            # 현재 보유 종목 분석
+            # 2. 현재 보유 종목 분석 (지독한 평단가 낮추기)
             if my_holdings:
                 for ticker in my_holdings:
                     try:
@@ -123,17 +119,18 @@ class MasonLogic:
                         rsi = float(self.calculate_rsi_wilder(close).iloc[-1])
                         last_close = float(close.iloc[-1])
                         buy_qty = math.ceil(daily_budget_usd / last_close)
-                        loc_price = last_close * 1.10 # [참고] 사령관님의 "평단가 이하 매수(1.00)" 원칙 적용 시 이 배율을 수정하십시오.
-                        final_report += f"\n📦 [HOLDING] {ticker}\nRSI: {rsi:.1f} / QTY: {buy_qty}\nLOC(10%): ${loc_price:.2f}\n"
+                        # LOC 가격은 현재가와 동일하게 설정하여 원칙 매수 유도
+                        loc_price = last_close 
+                        final_report += f"\n📦 [HOLDING] {ticker}\nRSI: {rsi:.1f} / QTY: {buy_qty}\nLOC: ${loc_price:.2f}\n"
                     except: continue
 
-            # [수정] 2억 목표 달성 시뮬레이션 (보급 삭제, 순수 복리)
+            # 3. [2억 달성 시뮬레이션] 보급 없이 오직 지독한 복리로만!
             target_goal = 20000 
             if seed_money < target_goal:
                 months = 0
                 temp_seed = seed_money
-                while temp_seed < target_goal and months < 120:
-                    temp_seed = (temp_seed * 1.05) # 600만 보급 삭제
+                while temp_seed < target_goal and months < 240: # 최대 20년 시뮬
+                    temp_seed = (temp_seed * 1.05) 
                     months += 1
                 
                 expected_date = datetime.now() + timedelta(days=months * 30)
@@ -152,12 +149,9 @@ class MasonLogic:
 
 if __name__ == "__main__":
     logic = MasonLogic()
-    # 1. 환경 변수(Variable) 최우선
-    # 2. 없으면 로컬 설정파일
-    # 3. 둘 다 없으면 "NONE" 또는 기본값
+    # GitHub Secrets 환경 변수 우선 적용
     seed_val = os.environ.get("MY_SEED", logic.settings.get("seed", "NONE"))
     holdings_val = os.environ.get("MY_HOLDINGS", logic.settings.get("holdings", "NONE"))
     divisions_val = os.environ.get("MY_DIVISIONS", logic.settings.get("divisions", "40"))
     
-    # --auto 인자가 있든 없든, 실제 데이터가 있을 때만 실행하도록 통합
     logic.perform_analysis(seed_val, holdings_val, divisions_val, is_auto=True)
