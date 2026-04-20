@@ -17,7 +17,7 @@ MY_PROFIT = float(os.environ.get("MY_PROFIT", "2088")) # 올해 주식 수익금
 
 # [전설의 데이터] 140일 만에 9배 팽창 (2025.12.01 ~ 2026.04.20 기준)
 START_TOTAL_SEED = 1000
-START_DATE = datetime(2025, 12, 1) # 사령관님의 140일 전 기준점
+START_DATE = datetime(2026, 1, 1) # 사령관님의 140일 전 기준점
 
 CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX", "FNGU", "SQQQ"]
 
