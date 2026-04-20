@@ -9,11 +9,11 @@ from datetime import datetime, timedelta
 TELEGRAM_TOKEN = "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY"
 TELEGRAM_CHAT_ID = "5466858773"
 
-# GitHub Secrets 변수 (이름을 아래와 같이 맞추시면 됩니다)
+# GitHub Secrets 변수
 DIVISIONS = int(os.environ.get("MY_DIVISIONS", "40")) 
-MY_SEED = float(os.environ.get("MY_SEED", "4000"))   # 현재 나의 순수 자산 (수입+수익)
+MY_SEED = float(os.environ.get("MY_SEED", "4000"))   # 현재 나의 총 순수 자산 (수입+수익 합계)
 MY_DEBT = float(os.environ.get("MY_DEBT", "5000"))   # 현재 나의 대출금
-MY_PROFIT = float(os.environ.get("MY_PROFIT", "0")) # 올해 주식 실제 수익금
+MY_PROFIT = float(os.environ.get("MY_PROFIT", "2088")) # [반영확인] 올해 주식 실제 수익금
 
 # [수익률 측정 기준] 2026년 1월 1일 "전설의 시작"
 REAL_START_DATE = datetime(2026, 1, 1) 
@@ -39,20 +39,22 @@ def calculate_rsi(series, period=14):
 def main():
     try:
         # 1. 자산 데이터 분석 (합산 로직)
-        total_available = MY_SEED + MY_DEBT # 총 가용 시드
+        total_available = MY_SEED + MY_DEBT # 총 가용 시드 (예: 9000)
+        pure_investment = MY_SEED - MY_PROFIT # 순수 자산 중 수익금을 제외한 '원금+수입'
         rate = get_exchange_rate()
         
         # 2. 실전 수익률 계산 (2026.1.1 대비 현재 순수 자산 증가율)
         today = datetime.now()
         elapsed_months = max((today - REAL_START_DATE).days / 30.44, 0.1)
-        # 월평균 복리 수익률
+        # 월평균 복리 수익률 (내 시드가 불어나는 속도)
         actual_monthly_yield = (MY_SEED / REAL_START_SEED) ** (1 / elapsed_months) - 1
         
-        # 3. 리포트 헤더 생성
+        # 3. 리포트 헤더 생성 (MY_PROFIT 강조)
         report = f"📅 {today.strftime('%Y-%m-%d')}\n💰 [Mason Asset Report]\n"
         report += f"------------------\n"
-        report += f"💵 순수 자산: {MY_SEED:,.0f}만\n"
-        report += f"📈 올해 수익: {MY_PROFIT:,.0f}만\n"
+        report += f"💵 총 순수자산: {MY_SEED:,.0f}만\n"
+        report += f"📈 올해 주식수익: {MY_PROFIT:,.0f}만\n"
+        report += f"ㄴ (순수원금/보급: {pure_investment:,.0f}만)\n"
         report += f"🏦 대출 병력: {MY_DEBT:,.0f}만\n"
         report += f"🚀 총 가용시드: {total_available:,.0f}만\n"
         report += f"------------------\n"
