@@ -65,13 +65,15 @@ def main():
                 rsi = float(calculate_rsi(c).iloc[-1])
                 price = float(c.iloc[-1])
                 
-                limit = 30 if t == "SQQQ" else 40
+          limit = 30 if t == "SQQQ" else 40
                 if rsi <= limit:
                     qty = math.ceil(daily_budget_usd / price)
-                    loc_price = price * 0.9 # 현재가 대비 10% 하단 타격
+                    # [지독한 LOC 공격 매수] 현재가보다 10% 높게 설정하여 확실한 체결 유도
+                    loc_buy_price = price * 1.1 
+                    
                     report += f"\n🎯 [TARGET] {t}\n"
                     report += f"RSI: {rsi:.1f} / 현재가: ${price:.2f}\n"
-                    report += f"📍 LOC 10% 매수가: ${loc_price:.2f}\n"
+                    report += f"📍 LOC 공격매수가(종가): ${loc_buy_price:.2f}\n"
                     report += f"📦 권장 수량: {qty}개\n"
                     found_cnt += 1
             except: continue
