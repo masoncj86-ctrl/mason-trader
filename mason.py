@@ -9,13 +9,14 @@ from datetime import datetime, timedelta
 TELEGRAM_TOKEN = "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY"
 TELEGRAM_CHAT_ID = "5466858773"
 
-# GitHub Secrets 변수
+# GitHub Secrets 변수 (없을 경우를 대비한 기본값 설정)
 DIVISIONS = int(os.environ.get("MY_DIVISIONS", "40")) 
 MY_PURE_SEED = float(os.environ.get("MY_SEED", "4000")) # 현재 나의 순수 자산 (수익 포함)
 MY_DEBT = float(os.environ.get("MY_DEBT", "5000"))      # 현재 나의 대출금
 
 # [수익률 측정 기준] 1,000만 원으로 시작한 전설의 시점
-REAL_START_DATE = datetime(2025, 10, 1) # 시작하신 날짜로 조정 가능
+# (사령관님의 실제 시작 날짜에 맞춰 2025-10-01 등으로 조정 가능합니다)
+REAL_START_DATE = datetime(2025, 10, 1) 
 REAL_START_SEED = 1000  # 진짜 시작 원금 (1,000만 원)
 
 CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX", "FNGU", "SQQQ"]
@@ -32,12 +33,13 @@ def calculate_rsi(series, period=14):
     down = -1 * delta.clip(upper=0)
     ma_up = up.ewm(com=period-1, adjust=False).mean()
     ma_down = down.ewm(com=period-1, adjust=False).mean()
-    return 100 - (100 / (1 + (ma_up / ma_down.replace(0, 0.001))))
+    rs = ma_up / ma_down.replace(0, 0.001)
+    return 100 - (100 / (1 + rs))
 
 def main():
     try:
         # 1. 자산 데이터 분석
-        total_available = MY_PURE_SEED + MY_DEBT # 총 가용 시드 (9,000 기준)
+        total_available = MY_PURE_SEED + MY_DEBT # 총 가용 시드 (예: 9,000)
         rate = get_exchange_rate()
         
         # 2. 실전 수익률 계산 (1,000만 원 원금 대비 현재 순자산 증가율)
@@ -58,25 +60,32 @@ def main():
         # 4. 화력 분석 및 LOC 가이드 (총 가용시드 기준)
         daily_budget_usd = ((total_available * 10000) / 3 / DIVISIONS) / rate
         found_cnt = 0
+        
         for t in CANDIDATES:
             try:
-                df = yf.download(t, period="3mo", progress=False)
-                c = df['Close'].iloc[:, 0] if isinstance(df['Close'], pd.DataFrame) else df['Close']
-                rsi = float(calculate_rsi(c).iloc[-1])
+                ticker = yf.Ticker(t)
+                df = ticker.history(period="3mo")
+                if df.empty: continue
+                
+                c = df['Close']
+                rsi_series = calculate_rsi(c)
+                rsi = float(rsi_series.iloc[-1])
                 price = float(c.iloc[-1])
                 
-          limit = 30 if t == "SQQQ" else 40
+                limit = 30 if t == "SQQQ" else 40
                 if rsi <= limit:
                     qty = math.ceil(daily_budget_usd / price)
-                    # [지독한 LOC 공격 매수] 현재가보다 10% 높게 설정하여 확실한 체결 유도
+                    # [LOC 공격 매수] 현재가보다 10% 높게 설정 (확실한 체결용)
                     loc_buy_price = price * 1.1 
                     
                     report += f"\n🎯 [TARGET] {t}\n"
                     report += f"RSI: {rsi:.1f} / 현재가: ${price:.2f}\n"
-                    report += f"📍 LOC 공격매수가(종가): ${loc_buy_price:.2f}\n"
+                    report += f"📍 LOC 공격가(+10%): ${loc_buy_price:.2f}\n"
                     report += f"📦 권장 수량: {qty}개\n"
                     found_cnt += 1
-            except: continue
+            except Exception as inner_e:
+                print(f"Error analyzing {t}: {inner_e}")
+                continue
         
         if found_cnt == 0: report += "\n✅ 사거리 내 타겟 없음"
 
@@ -87,18 +96,22 @@ def main():
         report += f"\n현재 달성률: {progress:,.1f}%"
         
         if actual_monthly_yield > 0:
-            # 총 시드(9,000)가 목표(20,000)가 될 때까지의 기간
+            # 총 시드가 목표에 도달하는 기간 계산
             months_to_go = math.log(target / total_available) / math.log(1 + actual_monthly_yield)
             est_date = (today + timedelta(days=months_to_go * 30.44)).strftime('%Y-%m-%d')
             report += f"\n🎯 예상 점령일: {est_date}"
 
-        report += "\n------------------\n지독하게 원칙 매수하십시오."
+        report += "\n------------------\n사령관님, 지독하게 원칙 매수하십시오."
         
+        # 텔레그램 전송
         requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
-                      data={"chat_id": TELEGRAM_CHAT_ID, "text": report})
+                      data={"chat_id": TELEGRAM_CHAT_ID, "text": report}, timeout=10)
         
     except Exception as e:
-        print(f"Error: {e}")
+        error_msg = f"❌ 실행 에러 발생: {str(e)}"
+        print(error_msg)
+        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
+                      data={"chat_id": TELEGRAM_CHAT_ID, "text": error_msg})
 
 if __name__ == "__main__":
     main()
