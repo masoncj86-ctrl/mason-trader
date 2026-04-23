@@ -8,11 +8,11 @@ jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-      # 1. 파일을 가져올 때 경로를 명시적으로 루트(./)로 고정합니다.
+      # 1. 파일을 가져올 때 하위 폴더 생성 방지 (path: .)
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          path: '.'
+          path: .
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -22,13 +22,13 @@ jobs:
       - name: Install dependencies
         run: pip install yfinance requests pynacl pandas
 
-      # 2. 실행할 때 파일의 '절대 경로'를 직접 찔러줍니다.
+      # 2. 실행 시 현재 디렉토리(./)에서 파일을 직접 실행
       - name: Update Secret from Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: python $GITHUB_WORKSPACE/updater.py
+        run: python ./updater.py
 
       - name: Send Daily Report
         env:
@@ -39,4 +39,4 @@ jobs:
           MY_DIVISIONS: ${{ secrets.MY_DIVISIONS }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python $GITHUB_WORKSPACE/main.py
+        run: python ./main.py
