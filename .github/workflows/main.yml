@@ -1,36 +1,47 @@
 name: Mason Asset Reporter
+
 on:
   schedule:
-    - cron: '30 22 * * *'
-  workflow_dispatch: # 수동 실행 버튼
+    - cron: '30 22 * * *' # 한국 시간 매일 아침 7시 30분 자동 실행
+  workflow_dispatch: # 사령관용 수동 실행 버튼
 
 jobs:
   report:
     runs-on: ubuntu-latest
+    
+    # [경로 오류 방어막] 가상 서버의 위치를 레포지토리 최상단으로 강제 고정!
+    defaults:
+      run:
+        working-directory: ./
+
     steps:
-      # [필수!] 사령관님의 파일들을 가상 서버로 지독하게 복사해오는 단계
+      # 1. 사령관님의 파일들(main.py, updater.py)을 가상 서버로 지독하게 복사
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 2. 파이썬 환경 구축
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
+      # 3. 필수 보급품(라이브러리) 설치
       - name: Install dependencies
-        run: pip install yfinance requests pynacl pandas
+        run: |
+          pip install yfinance requests pynacl pandas
 
-# 1단계: 텔레그램 업데이트 (경로 없이 파일명만!)
+      # 4. [1단계: 보급] 텔레그램 메시지 채집 및 깃허브 금고(Secret) 업데이트
       - name: Update Secret from Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: python updater.py # 앞에 폴더명 붙이지 마십시오!
+        run: python updater.py
 
-      # 2단계: 리포트 발송 (경로 없이 파일명만!)
+      # 5. [2단계: 교전] 최신화된 데이터로 자산 리포트 생성 및 발송
       - name: Send Daily Report
         env:
+          # 금고에서 꺼내오는 변수들 (오타 주의!)
           MY_HOLDINGS: ${{ secrets.MY_HOLDINGS }}
           MY_SEED: ${{ secrets.MY_SEED }}
           MY_DEBT: ${{ secrets.MY_DEBT }}
@@ -38,4 +49,4 @@ jobs:
           MY_DIVISIONS: ${{ secrets.MY_DIVISIONS }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py # 여기도 mason-trader/ 붙이지 마십시오!
+        run: python main.py
