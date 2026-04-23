@@ -20,15 +20,15 @@ jobs:
       - name: Install dependencies
         run: pip install yfinance requests pynacl pandas
 
-      # 1단계: 텔레그램 업데이트
+# 1단계: 텔레그램 업데이트 (경로 없이 파일명만!)
       - name: Update Secret from Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: python updater.py
+        run: python updater.py # 앞에 폴더명 붙이지 마십시오!
 
-      # 2단계: 리포트 발송 (여기서 main.py를 실행합니다)
+      # 2단계: 리포트 발송 (경로 없이 파일명만!)
       - name: Send Daily Report
         env:
           MY_HOLDINGS: ${{ secrets.MY_HOLDINGS }}
@@ -38,4 +38,4 @@ jobs:
           MY_DIVISIONS: ${{ secrets.MY_DIVISIONS }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py
+        run: python main.py # 여기도 mason-trader/ 붙이지 마십시오!
