@@ -1,104 +1,63 @@
+import os
 import yfinance as yf
 import requests
-import math
-import os
-from datetime import datetime
 
-# --- [사령관 기밀 데이터 직결] ---
-TELEGRAM_TOKEN = "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY"
-TELEGRAM_CHAT_ID = "5466858773"
+def send_telegram_message(message):
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+    requests.post(url, json=payload)
 
-# GitHub Secrets 데이터 호출
-DIVISIONS = int(os.environ.get("MY_DIVISIONS", "40")) 
-MY_SEED = float(os.environ.get("MY_SEED", "4000"))   
-MY_DEBT = float(os.environ.get("MY_DEBT", "5000"))   
-MY_PROFIT = float(os.environ.get("MY_PROFIT", "2088"))
-MY_HOLDINGS_RAW = os.environ.get("MY_HOLDINGS", "") # updater.py가 관리하는 데이터
+# 1. 자산 데이터 설정 (사령관님의 공식 적용!)
+seed = float(os.environ.get("MY_SEED", "4000")) # 수익금이 포함된 순수 자산
+debt = float(os.environ.get("MY_DEBT", "5000")) # 대출 병력
+divisions = int(os.environ.get("MY_DIVISIONS", "40"))
+holdings_str = os.environ.get("MY_HOLDINGS", "")
 
-# [전설의 기점] 2026.01.01 함대 창설일
-START_TOTAL_SEED = 1000
-START_DATE = datetime(2026, 1, 1)
-CANDIDATES = ["LABU", "TNA", "TSLL", "SOXL", "NRGU", "GDXU", "IONX", "FNGU", "SQQQ"]
+total_budget = seed + debt  # 딱 9,000만 원으로 고정! ㅋㅋㅋ
+total_purchase_krw = 0      # 주식을 살 때 들어간 원화 총액
+report_lines = []
 
-def get_exchange_rate():
-    try:
-        res = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()
-        return float(res['rates']['KRW'])
-    except: return 1450.0
+# 실시간 환율 (원화 환산을 위해 필요)
+try:
+    rate = yf.Ticker("USDKRW=X").history(period="1d")['Close'].iloc[-1]
+except:
+    rate = 1380.0 # 환율 통신 실패 시 기본값
 
-def calculate_rsi(series, period=14):
-    delta = series.diff()
-    up = delta.clip(lower=0).ewm(com=period-1, adjust=False).mean()
-    down = -1 * delta.clip(upper=0).ewm(com=period-1, adjust=False).mean()
-    return 100 - (100 / (1 + (up / down.replace(0, 0.001))))
-
-def main():
-    try:
-        current_total = MY_SEED + MY_DEBT
-        rate = get_exchange_rate()
-        today = datetime.now()
+if holdings_str:
+    holdings = holdings_str.split(",")
+    for h in holdings:
+        ticker_symbol, avg_price_str, qty_str = h.split(":")
+        avg_price = float(avg_price_str) # 소수점 평단 지독하게 인식!
+        quantity = float(qty_str)        # 수량 인식
         
-        # 1. 실시간 월 자산 증가율 계산
-        elapsed_days = max((today - START_DATE).days, 1)
-        daily_rate = (current_total / START_TOTAL_SEED) ** (1 / elapsed_days) - 1
-        monthly_growth_rate = ((1 + daily_rate) ** 30.44 - 1) * 100
+        # 현재가 정보
+        ticker = yf.Ticker(ticker_symbol)
+        current_price = ticker.history(period="1d")['Close'].iloc[-1]
         
-        # 2. 리포트 헤더
-        report = f"📅 {today.strftime('%Y-%m-%d')}\n💰 [Mason Asset Report v4.5]\n"
-        report += f"------------------\n"
-        report += f"🚀 총 가용시드: {current_total:,.0f}만\n"
-        report += f"📊 월 자산 증가율: {monthly_growth_rate:+.2f}%\n"
-        report += f"ㄴ ({elapsed_days}일간의 지독한 성장 기록)\n"
-        report += f"------------------\n"
-
-        # 3. 보유 함대 분석
-        daily_budget_usd = ((current_total * 10000) / 3 / DIVISIONS) / rate
+        # 원화 매수 금액 계산 (평단 * 수량 * 환율 / 1만)
+        purchase_krw = (avg_price * quantity * rate) / 10000
+        total_purchase_krw += purchase_krw
         
-        if MY_HOLDINGS_RAW:
-            report += "⚔️ [보유 함대 교전 상황]\n"
-            holdings = MY_HOLDINGS_RAW.split(",")
-            for h in holdings:
-                try:
-                    symbol, avg_p, qty = h.strip().split(":")
-                    ticker = yf.Ticker(symbol); df = ticker.history(period="3mo")
-                    cur_p = float(df['Close'].iloc[-1])
-                    profit_pct = (cur_p - float(avg_p)) / float(avg_p) * 100
-                    loc_p = cur_p * 1.1 # 사령관의 10% LOC 전술
-                    buy_count = math.ceil(daily_budget_usd / cur_p)
-                    
-                    report += f"📍 {symbol} ({profit_pct:+.1f}%)\n"
-                    report += f"ㄴ 평단: ${float(avg_p):.2f} / 현재: ${cur_p:.2f}\n"
-                    report += f"🔥 LOC(+10%): ${loc_p:.2f} ({buy_count}개)\n\n"
-                except: continue
+        # 수익률 및 종목 보고서
+        profit_rate = (current_price - avg_price) / avg_price * 100
+        report_lines.append(f"• *{ticker_symbol}*: 현재 ${current_price:.2f} (평단 ${avg_price:.2f}) | 수익률: {profit_rate:+.2f}%")
 
-        # 4. 신규 정찰 (RSI 기준)
-        report += "📡 [신규 타겟 정찰]\n"
-        found_cnt = 0
-        for t in CANDIDATES:
-            if MY_HOLDINGS_RAW and t in MY_HOLDINGS_RAW: continue 
-            try:
-                ticker = yf.Ticker(t); df = ticker.history(period="3mo")
-                rsi = float(calculate_rsi(df['Close']).iloc[-1])
-                if rsi <= (30 if t == "SQQQ" else 40):
-                    price = float(df['Close'].iloc[-1])
-                    buy_count = math.ceil(daily_budget_usd / price)
-                    report += f"🎯 {t} (RSI: {rsi:.1f})\n"
-                    report += f"ㄴ LOC가(+10%): ${price*1.1:.2f} ({buy_count}개)\n"
-                    found_cnt += 1
-            except: continue
-        if found_cnt == 0: report += "✅ 사거리 내 신규 타겟 없음\n"
+# 2. 지독하게 정확한 가용 시드 계산
+available_seed = total_budget - total_purchase_krw
 
-        # 5. 달성률
-        target = 20000
-        progress = (current_total / target) * 100
-        report += f"\n🏁 [Goal: 2억 고지]\n🚩 현재 달성률: {progress:,.1f}%\n"
-        report += "------------------\n지독하게 원칙 매수하십시오."
-        
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
-                      data={"chat_id": TELEGRAM_CHAT_ID, "text": report})
-        
-    except Exception as e:
-        print(f"Error: {e}")
+final_report = f"""
+🚀 **사령관님, 함대 자산 정밀 보고**
+---
+💰 **총 작전 예산**: {total_budget:,.0f}만 원
+📉 **현재 투입 원금**: {total_purchase_krw:,.0f}만 원
+💵 **남은 가용 시드**: {available_seed:,.0f}만 원
 
-if __name__ == "__main__":
-    main()
+💡 **분할 매수 전략** ({divisions}분할 기준)
+• 회당 투입 가능액: *{available_seed/divisions:,.0f}만 원*
+
+📊 **보유 종목 현황**
+""" + "\n".join(report_lines) + f"\n\n기준 환율: ₩{rate:.2f}"
+
+send_telegram_message(final_report)
