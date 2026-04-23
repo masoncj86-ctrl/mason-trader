@@ -1,8 +1,8 @@
 name: Mason Asset Reporter
 on:
   schedule:
-    - cron: '30 22 * * *' # 한국 시간 아침 7시 30분
-  workflow_dispatch: # 이 줄이 있어야 'Run workflow' 버튼이 생깁니다!
+    - cron: '30 22 * * *' # 한국 시간 아침 7시 30분 자동 실행
+  workflow_dispatch: # 수동 실행 버튼
 
 jobs:
   report:
@@ -17,6 +17,7 @@ jobs:
       - name: Install dependencies
         run: pip install yfinance requests pynacl pandas
 
+      # [1단계] 텔레그램 명령 확인 및 시크릿 업데이트
       - name: Update Secret from Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -24,9 +25,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: python updater.py
 
+      # [2단계] 최신화된 시크릿을 기반으로 리포트 생성 (여기가 누락되었습니다!)
       - name: Send Daily Report
         env:
-          # 시크릿에 등록된 값들을 불러옵니다
           MY_HOLDINGS: ${{ secrets.MY_HOLDINGS }}
           MY_SEED: ${{ secrets.MY_SEED }}
           MY_DEBT: ${{ secrets.MY_DEBT }}
