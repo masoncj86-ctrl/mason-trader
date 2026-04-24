@@ -9,13 +9,12 @@ def send_telegram_message(message):
     payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
     requests.post(url, json=payload)
 
-# 1. 자산 데이터 설정
+# 1. 자산 데이터 설정 (시드+대출 = 9,000만 원)
 seed = float(os.environ.get("MY_SEED", "4000"))
 debt = float(os.environ.get("MY_DEBT", "5000"))
-divisions = int(os.environ.get("MY_DIVISIONS", "40"))
 holdings_str = os.environ.get("MY_HOLDINGS", "")
+total_budget = seed + debt
 
-total_budget = seed + debt  # 9,000만 원 고정
 total_purchase_krw = 0
 report_lines = []
 
@@ -27,32 +26,35 @@ except:
 
 # 2. 보유 종목 정밀 분석
 if holdings_str:
+    # 텔레그램 입력 방식: /보유 종목:평단:수량 (예: GDXU:213.677:3)
     holdings = [h.strip() for h in holdings_str.split(",") if ":" in h]
     for h in holdings:
         try:
-            # [지독한 확인] 사령관님 입력: Ticker:평단:수량
             parts = h.split(":")
             ticker_symbol = parts[0].upper()
-            avg_price = float(parts[1])  # 평단 (213.677 또는 34.89)
-            quantity = float(parts[2])   # 수량 (3주 등)
+            avg_price = float(parts[1])  # 두 번째 값이 '평단'입니다!
+            quantity = float(parts[2])   # 세 번째 값이 '수량'입니다!
             
             ticker = yf.Ticker(ticker_symbol)
             hist = ticker.history(period="5d")
             
             if not hist.empty:
                 current_price = hist['Close'].iloc[-1]
-                # 매수 원금 계산 (평단 * 수량 * 환율 / 1만)
+                # 투입 원금 (원화) = 평단 * 수량 * 환율
                 purchase_krw = (avg_price * quantity * rate) / 10000
                 total_purchase_krw += purchase_krw
                 
                 profit_rate = (current_price - avg_price) / avg_price * 100
                 
-                # 리포트 출력 양식 수정: 평단과 수량을 지독하게 구분!
-                report_lines.append(f"• *{ticker_symbol}*: 현재 ${current_price:.2f} (평단: ${avg_price:.2f} / 보유: {quantity:.1f}주) | 수익률: {profit_rate:+.2f}%")
+                # [지독한 교정] 리포트에서 평단과 수량을 명확히 구분하여 출력
+                report_lines.append(
+                    f"• *{ticker_symbol}*: 현재 ${current_price:.2f}\n"
+                    f"  (평단: ${avg_price:.2f} / 보유: {quantity:.3f}주) | 수익: {profit_rate:+.2f}%"
+                )
         except:
             continue
 
-# 3. 가용 시드 계산
+# 3. 최종 리포트 구성
 available_seed = total_budget - total_purchase_krw
 
 final_report = f"""
