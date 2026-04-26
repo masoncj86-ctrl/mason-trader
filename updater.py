@@ -9,6 +9,11 @@ CHAT_ID = "5466858773"
 REPO = "masoncj86-ctrl/mason-trader"
 GH_TOKEN = os.environ.get("GH_TOKEN")
 
+def send_telegram_confirm(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": message}
+    requests.post(url, data=payload)
+
 def update_secret(secret_name, new_value):
     headers = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     key_url = f"https://api.github.com/repos/{REPO}/actions/secrets/public-key"
@@ -20,32 +25,41 @@ def update_secret(secret_name, new_value):
     
     secret_url = f"https://api.github.com/repos/{REPO}/actions/secrets/{secret_name}"
     data = {"encrypted_value": encrypted_value, "key_id": res_key['key_id']}
-    return requests.put(secret_url, headers=headers, json=data).status_code
+    res = requests.put(secret_url, headers=headers, json=data)
+    return res.status_code
 
 def main():
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
     updates = requests.get(url).json()
     
     if updates.get("result"):
-        # [지독한 교정] 최근 메시지부터 거꾸로 훑으며 명령어를 찾습니다!
+        # 최근 메시지 10개부터 거꾸로 훑으며 명령어 탐색
         for item in reversed(updates["result"]):
-            msg = item.get("message", {}).get("text", "")
+            message_obj = item.get("message", {})
+            msg = message_obj.get("text", "")
             
-            if msg.startswith("/보유"):
-                new_data = msg.replace("/보유", "").strip()
-                status = update_secret("MY_HOLDINGS", new_data)
-                print(f"보유 현황 업데이트 완료: {status}")
-                break # 최신 명령 하나만 처리하고 지독하게 종료!
+            if not msg: continue
 
-            elif msg.startswith("/시드"):
-                new_seed = msg.replace("/시드", "").strip()
-                update_secret("MY_SEED", new_seed)
-                break
+            target_secret = ""
+            if msg.startswith("/보유"): target_secret = "MY_HOLDINGS"
+            elif msg.startswith("/시드"): target_secret = "MY_SEED"
+            elif msg.startswith("/대출"): target_secret = "MY_DEBT"
+            elif msg.startswith("/수익"): target_secret = "MY_PROFIT" # 수익 업데이트도 추가!
 
-            elif msg.startswith("/대출"):
-                new_debt = msg.replace("/대출", "").strip()
-                update_secret("MY_DEBT", new_debt)
-                break
+            if target_secret:
+                new_data = msg.split(" ", 1)[1] if " " in msg else ""
+                if not new_data: # 공백 없이 붙여 쓴 경우 대비
+                    new_data = msg.replace(f"/{target_secret.split('_')[1].lower()}", "").strip()
+                
+                status = update_secret(target_secret, new_data)
+                
+                if status in [201, 204]:
+                    confirm = f"✅ [함대 최신화 성공]\n📦 항목: {target_secret}\n🚀 데이터: {new_data}"
+                else:
+                    confirm = f"❌ 업데이트 실패 (코드: {status})\nGH_TOKEN 권한을 지독하게 확인하십시오!"
+                
+                send_telegram_confirm(confirm)
+                break # 최신 명령 하나만 처리 후 종료
 
 if __name__ == "__main__":
     main()
