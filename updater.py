@@ -4,27 +4,15 @@ import base64
 from nacl import encoding, public
 import time
 
-# --- [사령관 기밀 데이터] ---
 TOKEN = "8278038145:AAFa9Y-RJhcW12SKtGOnqGNQW7w1q9ErPCY"
 CHAT_ID = "5466858773"
 REPO = "masoncj86-ctrl/mason-trader"
 GH_TOKEN = os.environ.get("GH_TOKEN")
 WORKFLOW_FILE = "main.yml" 
 
-def send_telegram_confirm(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message}
-    requests.post(url, data=payload)
-
-def trigger_report_workflow():
-    # 보급 완료 후 새 보고서를 뽑기 위한 지독한 연쇄 호출
-    headers = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
-    requests.post(url, headers=headers, json={"ref": "main"})
-
 def update_secret(secret_name, new_value):
-    # [지독한 정밀화] NRGU 등 티커의 숨은 공백과 콤마를 싹 제거합니다.
-    clean_value = new_value.strip().replace(" ", "")
+    # [지독한 교정] 양끝 공백만 제거하고 내부 구조는 절대 건드리지 않습니다.
+    clean_value = new_value.strip()
     
     headers = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     key_url = f"https://api.github.com/repos/{REPO}/actions/secrets/public-key"
@@ -48,28 +36,23 @@ def main():
             msg = item.get("message", {}).get("text", "").strip()
             if not msg: continue
 
-            # [1] 즉시 보고 명령어
-            if msg == "/보고":
-                trigger_report_workflow()
-                send_telegram_confirm("🚀 [즉시 보고 체계 가동] 최신 데이터를 불러옵니다...")
-                break
-
-            # [2] 보급 명령어 처리
             target_secret = ""
             if msg.startswith("/보유"): target_secret = "MY_HOLDINGS"
             elif msg.startswith("/시드"): target_secret = "MY_SEED"
-            elif msg.startswith("/대출"): target_secret = "MY_DEBT"
-            elif msg.startswith("/수익"): target_secret = "MY_PROFIT"
+            # ... (중략)
 
             if target_secret:
-                new_data = msg.split(" ", 1)[1] if " " in msg else msg[3:].strip()
+                # [핵심] 명령어 뒤의 데이터를 통째로 정확하게 분리합니다.
+                new_data = msg.replace("/보유", "").replace("/시드", "").strip()
                 status = update_secret(target_secret, new_data)
                 
                 if status in [201, 204]:
-                    send_telegram_confirm(f"✅ [보급 성공] {target_secret} 갱신 완료!")
-                    # [지독한 자동화] 보급 성공 즉시 보고서 생성 트리거!
-                    time.sleep(2) # 금고가 닫힐 시간을 잠시 줍니다.
-                    trigger_report_workflow()
+                    requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
+                                  json={"chat_id": CHAT_ID, "text": f"✅ [함대 최신화] {target_secret}가 '{new_data}'로 지독하게 갱신되었습니다!"})
+                    time.sleep(3) # 금고 동기화 대기
+                    # 리포트 자동 실행
+                    requests.post(f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches",
+                                  headers={"Authorization": f"token {GH_TOKEN}"}, json={"ref": "main"})
                 break
 
 if __name__ == "__main__":
