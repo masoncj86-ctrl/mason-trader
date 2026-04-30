@@ -2,8 +2,9 @@ name: Mason Asset Reporter
 
 on:
   schedule:
-    - cron: '30 22 * * *' # 한국 시간 매일 아침 7시 30분
-  workflow_dispatch: # 수동 실행 버튼
+    # 한국 시간(KST) 매일 정오 12:00 타격! (UTC 03:00)
+    - cron: '0 3 * * *'
+  workflow_dispatch: # 사령관님이 원할 때 수동 발포 가능
 
 jobs:
   report:
