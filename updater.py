@@ -4,9 +4,9 @@ import base64
 from nacl import encoding, public
 import time
 
-# [지독한 보안] 토큰은 깃허브 Secrets(TELEGRAM_TOKEN)에 넣으셨죠? ㅋㅋㅋ
+# [보안] 텔레그램 토큰과 깃허브 토큰은 Secrets에서 안전하게!
 TOKEN = os.environ.get("TELEGRAM_TOKEN") 
-MY_CHAT_ID = "5466858773" # 사령관님 전용 ID
+MY_CHAT_ID = "5466858773" 
 REPO = "masoncj86-ctrl/mason-trader"
 GH_TOKEN = os.environ.get("GH_TOKEN")
 WORKFLOW_FILE = "main.yml" 
@@ -28,61 +28,43 @@ def update_secret(secret_name, new_value):
 
 def main():
     if not TOKEN: return
-
-    # [지독한 서치 로직] 봇에게 온 모든 메시지를 가져옵니다.
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
-    try:
-        updates = requests.get(url).json()
-    except:
-        return
-
+    updates = requests.get(url).json()
+    
     if updates.get("result"):
-        # 가장 마지막 업데이트 ID (청소용)
         last_update_id = updates["result"][-1]["update_id"]
-        
-        # 최신 메시지부터 거꾸로 뒤집어서(reversed) 서치!
         for item in reversed(updates["result"]):
             msg_obj = item.get("message", {})
             sender_id = str(msg_obj.get("from", {}).get("id", ""))
             msg_text = msg_obj.get("text", "").strip()
 
-            # 1. 사령관님이 보낸 메시지인가?
-            if sender_id != MY_CHAT_ID:
-                continue
-
-            # 2. 명령어 키워드가 포함되어 있는가?
+            if sender_id != MY_CHAT_ID: continue
+            
             target_secret = ""
-            command_key = ""
+            cmd = ""
             if "/보유" in msg_text: 
-                target_secret = "MY_HOLDINGS"
-                command_key = "/보유"
+                target_secret, cmd = "MY_HOLDINGS", "/보유"
             elif "/시드" in msg_text: 
-                target_secret = "MY_SEED"
-                command_key = "/시드"
+                target_secret, cmd = "MY_SEED", "/시드"
 
             if target_secret:
-                # [정밀 추출] 명령어 이후의 데이터만 지독하게 발라냅니다.
-                # 예: "/보유 LABU:2..." -> "LABU:2..."
-                new_data = msg_text.split(command_key)[-1].strip()
+                new_data = msg_text.split(cmd)[-1].strip()
+                status = update_secret(target_secret, new_data)
                 
-                if new_data:
-                    status = update_secret(target_secret, new_data)
+                if status in [201, 204]:
+                    # 1. 먼저 보급 완료 보고!
+                    requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
+                                  json={"chat_id": MY_CHAT_ID, "text": f"✅ [함대 보급 완료] {target_secret} 갱신되었습니다!"})
                     
-                    if status in [201, 204]:
-                        # 성공 시 사령관님께 즉시 보고!
-                        confirm_text = f"✅ [함대 보급 완료]\n📦 {target_secret} 갱신\n🚀 데이터: {new_data}"
-                        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
-                                      json={"chat_id": MY_CHAT_ID, "text": confirm_text})
-                        
-                        time.sleep(3) # 동기화 대기
-                        # 즉시 리포트 발사!
-                        requests.post(f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches",
-                                      headers={"Authorization": f"token {GH_TOKEN}"}, json={"ref": "main"})
-                        
-                        # [핵심] 성공했으면 더 이상 예전 메시지를 뒤지지 않고 종료!
-                        break
+                    # 2. [지독한 핵심] 금고 정보가 리포트 서버에 전달될 시간을 줍니다! (5초 대기)
+                    print("🔄 데이터 동기화 대기 중 (5초)...")
+                    time.sleep(5) 
+                    
+                    # 3. 즉시 리포트 강제 발사! (이제는 최신 정보가 나갑니다 ㅋㅋㅋ)
+                    requests.post(f"https://api.github.com/repos/{REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches",
+                                  headers={"Authorization": f"token {GH_TOKEN}"}, json={"ref": "main"})
+                break 
 
-        # [소탕] 처리가 끝났으니, 읽은 메시지들은 텔레그램 서버에서 지독하게 비웁니다.
         requests.get(f"{url}?offset={last_update_id + 1}")
 
 if __name__ == "__main__":
